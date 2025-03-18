@@ -6,10 +6,17 @@
     "dev": "bun run --watch src/index.ts"
   },
   "dependencies": {
-    "elysia": "latest"
+    "@elysiajs/swagger": "^1.2.2",
+    "cheerio": "^1.0.0",
+    "elysia": "latest",
+    "http-status-codes": "^2.3.0",
+    "logestic": "^1.2.4",
+    "luxon": "^3.5.0",
+    "translate": "^3.0.1"
   },
   "devDependencies": {
-    "bun-types": "latest"
+    "bun-types": "latest",
+    "@types/luxon": "^3.4.2"
   },
   "module": "src/index.js"
 }

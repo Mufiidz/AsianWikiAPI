@@ -5,33 +5,33 @@ import { DateTime } from "luxon";
 
 export const dramasController = (app: Elysia) => {
   return app
-    .state("repository", new AsianwikiRepositoryImpl())
+    .state("asianWikiRepository", new AsianwikiRepositoryImpl())
     .group("/dramas", (app) =>
       app
         .get(
           "/slider",
           async ({
-            store: { repository },
+            store: { asianWikiRepository },
             logestic,
           }: {
-            store: { repository: AsianwikiRepositoryImpl };
+            store: { asianWikiRepository: AsianwikiRepositoryImpl };
             logestic: Logestic;
-          }) => repository.slider()
+          }) => asianWikiRepository.slider()
         )
         .get(
           "/upcoming",
           async ({
-            store: { repository },
+            store: { asianWikiRepository },
             query,
             logestic,
           }: {
-            store: { repository: AsianwikiRepositoryImpl };
+            store: { asianWikiRepository: AsianwikiRepositoryImpl };
             query: { month: number };
             logestic: Logestic;
           }) => {
             const dt = DateTime.now().set({ month: query.month });
             const month = dt.toFormat("MMMM");
-            return repository.upcoming(month);
+            return asianWikiRepository.upcoming(month);
           },
           {
             query: t.Object({

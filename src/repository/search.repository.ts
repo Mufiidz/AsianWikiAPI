@@ -21,7 +21,6 @@ export default class SearchRepositoryImpl implements SearchRepository {
     }
   }
   async searchTitle(title: string): Promise<any[]> {
-    console.log({ title });
     try {
       const html = await baseScrape(`${this.baseUrl}&search=${title}`);
       const $ = load(html);
@@ -30,7 +29,6 @@ export default class SearchRepositoryImpl implements SearchRepository {
 
       const elementTitle = $('h2:contains("Page title matches")');
       const isTitleExists = elementTitle.length === 1;
-      console.log({ isTitleExists });
 
       if (!isTitleExists) return results;
 
@@ -66,7 +64,6 @@ export default class SearchRepositoryImpl implements SearchRepository {
 
       const elementTitle = $('h2:contains("Page text matches")');
       const isTitleExists = elementTitle.length === 1;
-      console.log({ isTitleExists });
 
       if (!isTitleExists) return results;
 

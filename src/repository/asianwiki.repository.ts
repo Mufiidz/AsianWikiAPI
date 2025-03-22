@@ -34,7 +34,6 @@ export default class AsianwikiRepositoryImpl implements AsianwikiRepository {
         const table = $(element).next("table");
 
         if (title === "Additional Cast Members:") {
-          console.log({ title });
           stopParsing = true;
 
           const additionalCast: any[] = [];
@@ -57,8 +56,6 @@ export default class AsianwikiRepositoryImpl implements AsianwikiRepository {
               new Cast(id, name, `${baseUrl}/${id}`, undefined, cast)
             );
           });
-
-          console.log({ additionalCast });
 
           castData.push({
             title: "Additional Cast Members",
@@ -160,7 +157,6 @@ export default class AsianwikiRepositoryImpl implements AsianwikiRepository {
 
         if (key === "episodes") {
           value = parseInt(value, 10) || null;
-          console.log({ value });
         }
 
         dramaDetails[key] = value;

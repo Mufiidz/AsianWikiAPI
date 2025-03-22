@@ -2,9 +2,9 @@ import { load } from "cheerio";
 import Drama from "../model/drama.model";
 import Upcoming from "../model/upcoming.model";
 import { BadRequest } from "../utils/errors";
-import { NotFoundError } from "elysia";
 import translate from "translate";
 import Cast from "../model/cast.model";
+import baseScrape from "../utils/baseScrape";
 
 interface AsianwikiRepository {
   slider(): Promise<Drama[]>;
@@ -290,24 +290,4 @@ export default class AsianwikiRepositoryImpl implements AsianwikiRepository {
   async searchDrama(_title: string): Promise<String[]> {
     throw new Error("Method not implemented.");
   }
-}
-
-async function baseScrape(url: string): Promise<string> {
-  const response = await fetch(url, {
-    method: "GET",
-  });
-
-  if (response.status === 404) {
-    throw new NotFoundError(`${url} Not Found`);
-  }
-
-  if (!response.ok) {
-    console.log({ response });
-
-    throw new Error(`Failed to fetch data (${response.status})`, {
-      cause: response,
-    });
-  }
-
-  return await response.text();
 }

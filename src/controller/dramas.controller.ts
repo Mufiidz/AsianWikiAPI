@@ -15,7 +15,6 @@ export const dramasController = (app: Elysia) => {
             logestic,
           }: {
             store: { repository: AsianwikiRepositoryImpl };
-            query: { month: string };
             logestic: Logestic;
           }) => repository.slider()
         )

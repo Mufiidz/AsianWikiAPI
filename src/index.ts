@@ -8,6 +8,7 @@ import {
 import { searchController } from "./controller/search.controller";
 import { dramasController } from "./controller/dramas.controller";
 import { dramaController } from "./controller/drama.controller";
+import { personController } from "./controller/person.controller";
 
 const app = new Elysia()
   .use(
@@ -30,6 +31,7 @@ const app = new Elysia()
   .use(searchController)
   .use(dramasController)
   .use(dramaController)
+  .use(personController)
   .listen(3000);
 
 console.log(

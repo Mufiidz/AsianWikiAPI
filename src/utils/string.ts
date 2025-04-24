@@ -1,6 +1,8 @@
 interface String {
   toCamelCase(): string;
   formatTitle(): string;
+  startWith(value: string, caseSensitive?: boolean): boolean;
+  isEmpty(): boolean;
 }
 
 String.prototype.toCamelCase = function (): string {
@@ -15,8 +17,8 @@ String.prototype.toCamelCase = function (): string {
 
 String.prototype.formatTitle = function (): string {
   const text = this.trim();
-  return decodeURIComponent(text) 
-    .split(" ") 
+  return decodeURIComponent(text)
+    .split(" ")
     .map((word) => {
       if (word.startsWith("(")) {
         const cleanedWord = word.replace("(", "");
@@ -28,4 +30,20 @@ String.prototype.formatTitle = function (): string {
       }
     })
     .join("_");
+};
+
+String.prototype.startWith = function (
+  value: string,
+  caseSensitive: boolean = true
+): boolean {
+  if (!value) return false;
+  if (caseSensitive) {
+    return this.startsWith(value);
+  } else {
+    return this.toLowerCase().startsWith(value.toLowerCase());
+  }
+};
+
+String.prototype.isEmpty = function (): boolean {
+  return this.trim().length <= 0;
 };

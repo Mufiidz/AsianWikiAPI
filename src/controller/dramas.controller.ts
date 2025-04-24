@@ -26,12 +26,12 @@ export const dramasController = (app: Elysia) => {
             logestic,
           }: {
             store: { asianWikiRepository: AsianwikiRepositoryImpl };
-            query: { month: number };
+            query: { month: number; page: number };
             logestic: Logestic;
           }) => {
             const dt = DateTime.now().set({ month: query.month });
             const month = dt.toFormat("MMMM");
-            return asianWikiRepository.upcoming(month);
+            return asianWikiRepository.getUpcoming(month, query.page);
           },
           {
             query: t.Object({
@@ -51,10 +51,25 @@ export const dramasController = (app: Elysia) => {
                   }
                 },
               }),
+              page: t.Number({
+                minimum: 1,
+                default: 1,
+                error({ errors, value }: { errors: any[]; value: any }) {
+                  const valueError = errors[0];
+                  const page = value.page;
+                  if (page < 1) {
+                    return "Page must be greater than 0";
+                  }
+                  return valueError.summary;
+                },
+              }),
             }),
             transform({ query }) {
               const newMonth = +query.month;
+              const newPage = +query.page;
+
               query.month = newMonth;
+              query.page = newPage;
             },
           }
         )

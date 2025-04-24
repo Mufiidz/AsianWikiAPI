@@ -5,16 +5,22 @@ import { BadRequest } from "../utils/errors";
 import translate from "translate";
 import Cast from "../model/cast.model";
 import baseScrape from "../utils/baseScrape";
+import SearchRepositoryImpl from "./search.repository";
+import { DateTime } from "luxon";
+import { Page, PagedData } from "../model/pageddata.model";
 
 interface AsianwikiRepository {
   slider(): Promise<Drama[]>;
   searchDrama(title: string): Promise<String[]>;
   upcoming(month: string): Promise<Upcoming[]>;
+  getUpcoming(month: string, page: number): Promise<PagedData<{}>>;
   getDetailDrama(id: string): Promise<Drama>;
   getCastsDrama(id: string): Promise<Cast[]>;
 }
 
 export default class AsianwikiRepositoryImpl implements AsianwikiRepository {
+  searchRepository = new SearchRepositoryImpl();
+
   async getCastsDrama(id: string): Promise<any[]> {
     if (id.length <= 2) {
       throw new BadRequest("Id must be at least 2 characters long");
@@ -200,6 +206,10 @@ export default class AsianwikiRepositoryImpl implements AsianwikiRepository {
       throw error;
     }
   }
+
+  /** Gets the upcoming dramas
+   * @deprecated use {@link getUpcoming()}
+   */
   async upcoming(month: string): Promise<Upcoming[]> {
     try {
       const html = await baseScrape(`${Bun.env.BASE_URL}/Main_Page`);
@@ -245,12 +255,114 @@ export default class AsianwikiRepositoryImpl implements AsianwikiRepository {
           dramas,
         }))
         .filter(
-          (item) =>
-            item.date
-              .toLocaleLowerCase()
-              .startsWith(month.toLocaleLowerCase()) && item.dramas.length > 0
+          (item) => item.date.startWith(month, false) && item.dramas.length > 0
         );
       return results;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async getUpcoming(month: string, page: number = 1): Promise<PagedData<{}>> {
+    try {
+      console.log({ month });
+      const html = await baseScrape(
+        `${Bun.env.BASE_URL}/Template:UpcomingDramas${month}`
+      );
+
+      const $ = load(html);
+
+      let allDramas: {
+        id: string;
+        title: string;
+        imageUrl: string | null;
+      }[] = [];
+      const pageSize = 10;
+
+      const columns = $('#mw-content-text > div[style*="width: 50%"]');
+      let currentWeek: string | null = null;
+
+      columns.each((_, col) => {
+        const parentUl = $(col).find("> ul").first(); // ambil <ul> utama
+
+        parentUl.contents().each((_, node) => {
+          if (node.type === "text") {
+            const possibleWeek = $(node).text().trim();
+            if (possibleWeek && possibleWeek.length > 0) {
+              currentWeek = possibleWeek.replace(/^"+|"+$/g, "").trim();
+            }
+          }
+
+          if (node.type === "tag" && node.name === "ul") {
+            const subUl = $(node);
+
+            subUl.find("li").each((_, li) => {
+              const parentText = $(li).text().trim();
+              const element = load(parentText);
+              const aTag = element("a");
+
+              const title = aTag
+                .text()
+                .replace(/\s+/g, " ")
+                .replace(/_/g, " ")
+                .trim();
+              const link = aTag.attr("href")?.trim() || "";
+              const id = link?.split("/").pop() || null;
+              const networkMatch = parentText.trim().match(/\(([^()]+)\)$/);
+              const network = networkMatch ? networkMatch[1] : null;
+
+              if (!id || !title || !link) return;
+
+              allDramas.push({
+                id,
+                title,
+                imageUrl: null,
+                ...{
+                  link,
+                  network,
+                  week: currentWeek,
+                  weekRange: currentWeek
+                    ? this.parseDateRange(currentWeek)
+                    : null,
+                },
+              });
+            });
+          }
+        });
+      });
+
+      const length = allDramas.length;
+      const totalPages = Math.ceil(length / pageSize);
+
+      console.log(length);
+
+      let pagedData = new PagedData(
+        allDramas,
+        new Page(length, allDramas.length, totalPages, page)
+      );
+
+      if (length <= 0) return pagedData;
+
+      const start = (page - 1) * pageSize;
+      const end = start + pageSize;
+
+      allDramas = allDramas.slice(start, end);
+
+      console.log(allDramas.length);
+
+      if (allDramas.length > 0) {
+        for (const drama of allDramas) {
+          const imageUrl = await this.searchRepository.getImageDrama(
+            drama.title
+          );
+          drama.imageUrl = imageUrl;
+        }
+      }
+
+      pagedData.data = allDramas;
+      pagedData.page = new Page(length, allDramas.length, totalPages, page);
+
+      return pagedData;
     } catch (error) {
       throw error;
     }
@@ -285,5 +397,71 @@ export default class AsianwikiRepositoryImpl implements AsianwikiRepository {
   }
   async searchDrama(_title: string): Promise<String[]> {
     throw new Error("Method not implemented.");
+  }
+
+  parseDateRange(weekStr: string): { start: Date; end: Date } | null {
+    try {
+      const currentYear = new Date().getFullYear();
+      const zone = "Asia/Jakarta";
+
+      // Format: "April 1-7"
+      const rangeMatch = weekStr.match(/^([A-Za-z]+)\s+(\d{1,2})-(\d{1,2})$/);
+      if (rangeMatch) {
+        const [, monthStr, startDayStr, endDayStr] = rangeMatch;
+
+        const start = DateTime.fromFormat(
+          `${monthStr} ${startDayStr} ${currentYear}`,
+          "LLLL d yyyy",
+          { zone }
+        );
+        const end = DateTime.fromFormat(
+          `${monthStr} ${endDayStr} ${currentYear}`,
+          "LLLL d yyyy",
+          { zone }
+        );
+
+        if (!start.isValid || !end.isValid) return null;
+
+        return {
+          start: start.toJSDate(),
+          end: end.toJSDate(),
+        };
+      }
+
+      // Format: "January 2"
+      const singleDateMatch = weekStr.match(/^([A-Za-z]+)\s+(\d{1,2})$/);
+      if (singleDateMatch) {
+        const [, monthStr, dayStr] = singleDateMatch;
+
+        const date = DateTime.fromFormat(
+          `${monthStr} ${dayStr} ${currentYear}`,
+          "LLLL d yyyy",
+          { zone }
+        );
+
+        if (!date.isValid) return null;
+
+        return {
+          start: date.toJSDate(),
+          end: date.toJSDate(),
+        };
+      }
+
+      // Format: "2025"
+      if (/^\d{4}$/.test(weekStr)) {
+        const year = parseInt(weekStr);
+        const start = DateTime.fromObject({ year, month: 1, day: 1 }, { zone });
+        const end = DateTime.fromObject({ year, month: 12, day: 31 }, { zone });
+        return {
+          start: start.toJSDate(),
+          end: end.toJSDate(),
+        };
+      }
+
+      return null;
+    } catch (error) {
+      console.error(error);
+      throw error;
+    }
   }
 }

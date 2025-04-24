@@ -3,8 +3,8 @@ class Drama {
   title: string | null;
   url: string | null;
   imageUrl: string | null;
-  rating: number | null;
-  vote: number | null;
+  rating: number | null | undefined;
+  vote: number | null | undefined;
 
   constructor(
     id?: string,
@@ -18,8 +18,8 @@ class Drama {
     this.title = title || null;
     this.url = url || null;
     this.imageUrl = imageUrl || null;
-    this.rating = rating || null;
-    this.vote = vote || null;
+    this.rating = rating || undefined;
+    this.vote = vote || undefined;
   }
 }
 

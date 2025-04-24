@@ -1,10 +1,16 @@
 import { load } from "cheerio";
 import baseScrape from "../utils/baseScrape";
 
+enum SearchType {
+  DEFAULT = "default",
+  IMAGE = "images",
+}
+
 interface SearchRepository {
   searchAll(query: string): Promise<any>;
   searchTitle(title: string): Promise<any[]>;
   searchText(text: string): Promise<any[]>;
+  getImageDrama(query: string): Promise<string | null>;
 }
 
 export default class SearchRepositoryImpl implements SearchRepository {
@@ -93,6 +99,53 @@ export default class SearchRepositoryImpl implements SearchRepository {
     }
   }
 
-  baseUrl =
-    "https://asianwiki.com/index.php?title=Special%3ASearch&profile=default&fulltext=Search";
+  async getImageDrama(query: string): Promise<string | null> {
+    try {
+      const baseUrl = this.baseUrl(query, SearchType.IMAGE);
+      console.log({ baseUrl });
+      const html = await baseScrape(baseUrl);
+
+      const $ = load(html);
+
+      const results: {
+        imageUrl: string | null;
+        imagePage: string | null;
+        title: string;
+        metadata: string;
+      }[] = [];
+
+      $("ul.mw-search-results li").each((_, el) => {
+        const imageTag = $(el).find("img");
+        const imageUrl = imageTag.attr("src");
+        const imagePage = $(el).find("a.image").attr("href");
+        const title = $(el).find("a[title]").attr("title") || "";
+        const metadata = $(el).find(".mw-search-result-data").text().trim();
+
+        if (!title.startWith(`File:${query}-p`, false)) return;
+
+        results.push({
+          imageUrl: imageUrl ? `${Bun.env.BASE_URL}${imageUrl}` : null,
+          imagePage: imagePage ? `${Bun.env.BASE_URL}${imagePage}` : null,
+          title,
+          metadata,
+        });
+      });
+
+      console.log(query, { results });
+
+      if (results.length <= 0) return null;
+
+      return results.at(-1)?.imageUrl || null;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  baseUrl = (
+    search: string,
+    searchType: SearchType = SearchType.DEFAULT
+  ): string =>
+    search.isEmpty()
+      ? ""
+      : `${Bun.env.BASE_URL}/index.php?profile=${searchType}&fulltext=Search&search=${search}`;
 }

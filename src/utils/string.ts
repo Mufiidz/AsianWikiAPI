@@ -1,7 +1,7 @@
 interface String {
   toCamelCase(): string;
   formatTitle(): string;
-  startWith(value: string, caseSensitive?: boolean): boolean;
+  startWith(value: string | RegExp, caseSensitive?: boolean): boolean;
   isEmpty(): boolean;
 }
 
@@ -33,15 +33,32 @@ String.prototype.formatTitle = function (): string {
 };
 
 String.prototype.startWith = function (
-  value: string,
+  value: string | RegExp,
   caseSensitive: boolean = true
 ): boolean {
   if (!value) return false;
-  if (caseSensitive) {
-    return this.startsWith(value);
-  } else {
-    return this.toLowerCase().startsWith(value.toLowerCase());
+
+  const str = this.toString();
+
+  if (typeof value === "string") {
+    if (!caseSensitive) {
+      return str.toLowerCase().startsWith(value.toLowerCase());
+    }
+    return str.startsWith(value);
   }
+
+  let regex = value;
+  const pattern = regex.source;
+
+  if (!pattern.startsWith("^")) {
+    regex = new RegExp("^" + pattern, caseSensitive ? regex.flags : regex.flags + "i");
+  } else if (!caseSensitive && !regex.flags.includes("i")) {
+    regex = new RegExp(pattern, regex.flags + "i");
+  }
+
+  console.log({regex})
+
+  return regex.test(str);
 };
 
 String.prototype.isEmpty = function (): boolean {

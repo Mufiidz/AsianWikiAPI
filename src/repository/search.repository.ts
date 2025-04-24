@@ -107,7 +107,7 @@ export default class SearchRepositoryImpl implements SearchRepository {
 
       const $ = load(html);
 
-      const results: {
+      let results: {
         imageUrl: string | null;
         imagePage: string | null;
         title: string;
@@ -121,8 +121,6 @@ export default class SearchRepositoryImpl implements SearchRepository {
         const title = $(el).find("a[title]").attr("title") || "";
         const metadata = $(el).find(".mw-search-result-data").text().trim();
 
-        if (!title.startWith(`File:${query}-p`, false)) return;
-
         results.push({
           imageUrl: imageUrl ? `${Bun.env.BASE_URL}${imageUrl}` : null,
           imagePage: imagePage ? `${Bun.env.BASE_URL}${imagePage}` : null,
@@ -131,9 +129,17 @@ export default class SearchRepositoryImpl implements SearchRepository {
         });
       });
 
-      console.log(query, { results });
-
       if (results.length <= 0) return null;
+
+      const defaultImage = results[0].imageUrl;
+
+      results = results.filter((value) =>
+        value.title
+          .replace(/\.[^/.]+$/, "")
+          .startWith(/File:(.+?)-(p|tp|cp)\d*$/, false)
+      );
+
+      if (results.length <= 0) return defaultImage;
 
       return results.at(-1)?.imageUrl || null;
     } catch (error) {

@@ -51,22 +51,24 @@ export const dramasController = (app: Elysia) => {
                   }
                 },
               }),
-              page: t.Number({
-                minimum: 1,
-                default: 1,
-                error({ errors, value }: { errors: any[]; value: any }) {
-                  const valueError = errors[0];
-                  const page = value.page;
-                  if (page < 1) {
-                    return "Page must be greater than 0";
-                  }
-                  return valueError.summary;
-                },
-              }),
+              page: t.Optional(
+                t.Number({
+                  minimum: 1,
+                  default: 1,
+                  error({ errors, value }: { errors: any[]; value: any }) {
+                    const valueError = errors[0];
+                    const page = value.page;
+                    if (page < 1) {
+                      return "Page must be greater than 0";
+                    }
+                    return valueError.summary;
+                  },
+                })
+              ),
             }),
             transform({ query }) {
               const newMonth = +query.month;
-              const newPage = +query.page;
+              const newPage = +(query.page ?? 1);
 
               query.month = newMonth;
               query.page = newPage;

@@ -56,8 +56,6 @@ String.prototype.startWith = function (
     regex = new RegExp(pattern, regex.flags + "i");
   }
 
-  console.log({regex})
-
   return regex.test(str);
 };
 

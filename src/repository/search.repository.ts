@@ -28,7 +28,9 @@ export default class SearchRepositoryImpl implements SearchRepository {
   }
   async searchTitle(title: string): Promise<any[]> {
     try {
-      const html = await baseScrape(`${this.baseUrl}&search=${title}`);
+      const html = await baseScrape(
+        `${this.baseUrl(title, SearchType.DEFAULT)}`
+      );
       const $ = load(html);
 
       const results: {}[] = [];
@@ -38,24 +40,39 @@ export default class SearchRepositoryImpl implements SearchRepository {
 
       if (!isTitleExists) return results;
 
-      elementTitle
+      const listItems = elementTitle
         .next("ul.mw-search-results")
         .find("li")
-        .each((_index, element) => {
-          const titleElement = $(element).find(".mw-search-result-heading a");
-          const title = titleElement.text().trim();
-          const link = titleElement.attr("href") || "";
-          const description = $(element).find(".searchresult").text().trim();
-          const descriptionMatch = description.match(/File:([^|}]+)/);
-          const image = descriptionMatch
-            ? descriptionMatch[1].replace(/\s+/g, "_")
-            : null;
-          results.push({
-            title,
-            link: `${Bun.env.BASE_URL}${link}`,
-            imageUrl: image ? `${Bun.env.BASE_URL}/images/a/a9/${image}` : null,
-          });
+        .get();
+
+      for (const element of listItems) {
+        const titleElement = $(element).find(".mw-search-result-heading a");
+        const title = titleElement.text().trim();
+        const link = titleElement.attr("href") || "";
+        const description = $(element).find(".searchresult").text().trim();
+        const isImgFile = description.match(
+          /(?:ImagePortrait\|File:|Image:|File:)([^|\}\n]+?\.(jpg|jpeg|png))/i
+        );
+
+        if (!isImgFile) continue;
+
+        const imgFileName = isImgFile ? isImgFile[1] : null;
+        const match = description.match(/'''(Drama|Movie):'''\s*(.+)/);
+
+        if (!match || !imgFileName) continue;
+
+        const image = await this.getImageDrama(imgFileName);
+
+        if (!image) continue;
+
+        results.push({
+          id: link.replace(/\//g, ""),
+          title,
+          type: match[1],
+          url: `${Bun.env.BASE_URL}${link}`,
+          imageUrl: image,
         });
+      }
       return results;
     } catch (error) {
       throw error;

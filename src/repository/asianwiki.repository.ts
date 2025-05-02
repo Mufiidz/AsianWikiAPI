@@ -277,7 +277,7 @@ export default class AsianwikiRepositoryImpl implements AsianwikiRepository {
         title: string;
         imageUrl: string | null;
       }[] = [];
-      const pageSize = 10;
+      const pageSize = 5;
 
       const columns = $('#mw-content-text > div[style*="width: 50%"]');
       let currentWeek: string | null = null;

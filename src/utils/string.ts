@@ -3,6 +3,9 @@ interface String {
   formatTitle(): string;
   startWith(value: string | RegExp, caseSensitive?: boolean): boolean;
   isEmpty(): boolean;
+  contain(value: string, caseSensitive?: boolean): boolean;
+  cleaned(): string;
+  onlyAlphanumeric(): string;
 }
 
 String.prototype.toCamelCase = function (): string {
@@ -51,7 +54,10 @@ String.prototype.startWith = function (
   const pattern = regex.source;
 
   if (!pattern.startsWith("^")) {
-    regex = new RegExp("^" + pattern, caseSensitive ? regex.flags : regex.flags + "i");
+    regex = new RegExp(
+      "^" + pattern,
+      caseSensitive ? regex.flags : regex.flags + "i"
+    );
   } else if (!caseSensitive && !regex.flags.includes("i")) {
     regex = new RegExp(pattern, regex.flags + "i");
   }
@@ -61,4 +67,23 @@ String.prototype.startWith = function (
 
 String.prototype.isEmpty = function (): boolean {
   return this.trim().length <= 0;
+};
+
+String.prototype.contain = function (
+  value: string,
+  caseSensitive: boolean = true
+): boolean {
+  if (caseSensitive) {
+    return this.includes(value);
+  } else {
+    return this.toLocaleLowerCase().includes(value.toLocaleLowerCase());
+  }
+};
+
+String.prototype.cleaned = function (): string {
+  return this.replace(/\s+/g, " ").trim();
+};
+
+String.prototype.onlyAlphanumeric = function (): string {
+  return this.replace(/[^a-zA-Z0-9 ]/g, "").trim();
 };

@@ -8,204 +8,16 @@ import baseScrape from "../utils/baseScrape";
 import SearchRepositoryImpl from "./search.repository";
 import { DateTime } from "luxon";
 import { Page, PagedData } from "../model/pageddata.model";
+import { parseDateRange } from "../utils/dateRange";
 
 interface AsianwikiRepository {
   slider(): Promise<Drama[]>;
-  searchDrama(title: string): Promise<String[]>;
   upcoming(month: string): Promise<Upcoming[]>;
   getUpcoming(month: string, page: number): Promise<PagedData<{}>>;
-  getDetailDrama(id: string): Promise<Drama>;
-  getCastsDrama(id: string): Promise<Cast[]>;
 }
 
 export default class AsianwikiRepositoryImpl implements AsianwikiRepository {
   searchRepository = new SearchRepositoryImpl();
-
-  async getCastsDrama(id: string): Promise<any[]> {
-    if (id.length <= 2) {
-      throw new BadRequest("Id must be at least 2 characters long");
-    }
-
-    try {
-      const baseUrl = Bun.env.BASE_URL;
-      const url = `${baseUrl}/${id}`;
-      const html = await baseScrape(url);
-      const $ = load(html);
-
-      let castData: any = [];
-      let stopParsing = false;
-
-      $("h2, h3, p b").each((_, element) => {
-        const title = $(element).text().trim();
-        const table = $(element).next("table");
-
-        if (title === "Additional Cast Members:") {
-          stopParsing = true;
-
-          const additionalCast: any[] = [];
-
-          const additionalCastSection = $(
-            'p:contains("Additional Cast Members")'
-          ).next("ul");
-
-          additionalCastSection.find("li").each((index, element) => {
-            const linkElement = $(element).find("a");
-            const name = linkElement.text().trim();
-            const id = linkElement.attr("href")?.split("/").pop();
-            const cast = $(element)
-              .text()
-              .replace(linkElement.text(), "")
-              .trim()
-              .replace("- ", "");
-
-            additionalCast.push(
-              new Cast(id, name, `${baseUrl}/${id}`, undefined, cast)
-            );
-          });
-
-          castData.push({
-            title: "Additional Cast Members",
-            casts: additionalCast,
-          });
-
-          return;
-        }
-
-        if (stopParsing) return;
-
-        if (table.length) {
-          const ids: string[] = [];
-          const actors: string[] = [];
-          const profileUrls: string[] = [];
-          const images: string[] = [];
-          const characters: string[] = [];
-
-          table.find("tr:nth-last-of-type(2) td a").each((_, el) => {
-            const id = $(el).attr("href")?.split("/").pop();
-            actors.push($(el).text().trim());
-            ids.push(id || "");
-            profileUrls.push(`${baseUrl}/${id}`);
-          });
-
-          table.find("tr:nth-of-type(2) td img").each((_, el) => {
-            let imgSrc = $(el).attr("src");
-            if (imgSrc && !imgSrc.startsWith("http")) {
-              imgSrc = `${baseUrl}${imgSrc}`;
-            }
-            images.push(imgSrc || "");
-          });
-
-          table.find("tr:last-of-type td").each((_, el) => {
-            characters.push($(el).text().trim());
-          });
-
-          const casts = actors.map((actor, index) => {
-            if (!actor || !ids[index]) return;
-            return new Cast(
-              ids[index],
-              actor,
-              profileUrls[index],
-              images[index],
-              characters[index]
-            );
-          });
-
-          castData.push({
-            title,
-            casts,
-          });
-        }
-      });
-
-      return castData;
-    } catch (error) {
-      throw error;
-    }
-  }
-  async getDetailDrama(id: string): Promise<Drama> {
-    if (id.length <= 2) {
-      throw new BadRequest("Id must be at least 2 characters long");
-    }
-
-    try {
-      const baseUrl = Bun.env.BASE_URL;
-      const url = `${baseUrl}/${id}`;
-      const html = await baseScrape(url);
-      const $ = load(html);
-
-      let title = $("h1").text().trim();
-      let imageUrl = $(".thumb.tright .thumbimage").attr("src");
-
-      const ratingText = $("#w4g_rb_area-1").text().trim();
-
-      const ratingMatch = ratingText.match(/(\d+)\/100/);
-      const votesMatch = ratingText.match(/(\d+)\s+votes/);
-
-      const rating = ratingMatch ? parseInt(ratingMatch[1], 10) : undefined;
-      const votes = votesMatch ? parseInt(votesMatch[1], 10) : undefined;
-
-      const dramaDetails: Record<string, string> = {};
-
-      $("ul li").each((_, el) => {
-        let key = $(el).find("b").text().replace(":", "").trim();
-        let value: any = $(el).clone().children().remove().end().text().trim();
-
-        const linkText = $(el)
-          .find("a")
-          .map((_, a) => $(a).text().trim())
-          .get()
-          .join(", ");
-        if (linkText) value = linkText;
-
-        if (!key || !value) return;
-
-        key = key.toCamelCase();
-
-        if (key === "episodes") {
-          value = parseInt(value, 10) || null;
-        }
-
-        dramaDetails[key] = value;
-      });
-
-      const synopsisElement = $("h2:contains('Plot Synopsis')").next("p");
-
-      const synopsisText = synopsisElement
-        .clone()
-        .children("a")
-        .replaceWith(function () {
-          return `${$(this).text().trim()}`;
-        })
-        .remove()
-        .end()
-        .text()
-        .trim();
-
-      const idTranslated = await translate(synopsisText, "id");
-
-      const links = synopsisElement
-        .find("a")
-        .map((_, el) => ({
-          name: $(el).text().trim(),
-          url: `${baseUrl}${$(el).attr("href")}`,
-        }))
-        .get();
-
-      if (imageUrl) {
-        imageUrl = `${baseUrl}${imageUrl}`;
-      }
-
-      const drama = new Drama(id, title, url, imageUrl, rating, votes);
-
-      return {
-        ...drama,
-        ...dramaDetails,
-        ...{ synopsis: { original: synopsisText, id: idTranslated, links } },
-      };
-    } catch (error) {
-      throw error;
-    }
-  }
 
   /** Gets the upcoming dramas
    * @deprecated use {@link getUpcoming()}
@@ -321,9 +133,7 @@ export default class AsianwikiRepositoryImpl implements AsianwikiRepository {
                   link,
                   network,
                   week: currentWeek,
-                  weekRange: currentWeek
-                    ? this.parseDateRange(currentWeek)
-                    : null,
+                  weekRange: currentWeek ? parseDateRange(currentWeek) : null,
                 },
               });
             });
@@ -353,7 +163,7 @@ export default class AsianwikiRepositoryImpl implements AsianwikiRepository {
       if (allDramas.length > 0) {
         for (const drama of allDramas) {
           const imageUrl = await this.searchRepository.getImageDrama(
-            drama.title
+            drama.title.onlyAlphanumeric()
           );
           drama.imageUrl = imageUrl;
         }
@@ -392,75 +202,6 @@ export default class AsianwikiRepositoryImpl implements AsianwikiRepository {
 
       return results;
     } catch (error) {
-      throw error;
-    }
-  }
-  async searchDrama(_title: string): Promise<String[]> {
-    throw new Error("Method not implemented.");
-  }
-
-  parseDateRange(weekStr: string): { start: Date; end: Date } | null {
-    try {
-      const currentYear = new Date().getFullYear();
-      const zone = "Asia/Jakarta";
-
-      // Format: "April 1-7"
-      const rangeMatch = weekStr.match(/^([A-Za-z]+)\s+(\d{1,2})-(\d{1,2})$/);
-      if (rangeMatch) {
-        const [, monthStr, startDayStr, endDayStr] = rangeMatch;
-
-        const start = DateTime.fromFormat(
-          `${monthStr} ${startDayStr} ${currentYear}`,
-          "LLLL d yyyy",
-          { zone }
-        );
-        const end = DateTime.fromFormat(
-          `${monthStr} ${endDayStr} ${currentYear}`,
-          "LLLL d yyyy",
-          { zone }
-        );
-
-        if (!start.isValid || !end.isValid) return null;
-
-        return {
-          start: start.toJSDate(),
-          end: end.toJSDate(),
-        };
-      }
-
-      // Format: "January 2"
-      const singleDateMatch = weekStr.match(/^([A-Za-z]+)\s+(\d{1,2})$/);
-      if (singleDateMatch) {
-        const [, monthStr, dayStr] = singleDateMatch;
-
-        const date = DateTime.fromFormat(
-          `${monthStr} ${dayStr} ${currentYear}`,
-          "LLLL d yyyy",
-          { zone }
-        );
-
-        if (!date.isValid) return null;
-
-        return {
-          start: date.toJSDate(),
-          end: date.toJSDate(),
-        };
-      }
-
-      // Format: "2025"
-      if (/^\d{4}$/.test(weekStr)) {
-        const year = parseInt(weekStr);
-        const start = DateTime.fromObject({ year, month: 1, day: 1 }, { zone });
-        const end = DateTime.fromObject({ year, month: 12, day: 31 }, { zone });
-        return {
-          start: start.toJSDate(),
-          end: end.toJSDate(),
-        };
-      }
-
-      return null;
-    } catch (error) {
-      console.error(error);
       throw error;
     }
   }

@@ -7,7 +7,7 @@ import {
 } from "./middleware/response.midleware";
 import { searchController } from "./controller/search.controller";
 import { dramasController } from "./controller/dramas.controller";
-import { dramaController } from "./controller/drama.controller";
+import { showController } from "./controller/show.controller";
 import { personController } from "./controller/person.controller";
 
 const app = new Elysia()
@@ -30,7 +30,7 @@ const app = new Elysia()
   .use(useErrorResponse)
   .use(searchController)
   .use(dramasController)
-  .use(dramaController)
+  .use(showController)
   .use(personController)
   .listen(3000);
 

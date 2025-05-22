@@ -1,5 +1,4 @@
 import Elysia, { t } from "elysia";
-import AsianwikiRepositoryImpl from "../repository/asianwiki.repository";
 import "../utils/string";
 import ShowRepositoryImpl from "../repository/show.repository";
 
@@ -10,11 +9,13 @@ export const showController = (app: Elysia) =>
         "/:id",
         async ({
           params: { id },
+          query: { lang },
           store: { showRepository },
         }: {
           params: { id: string };
+          query: { lang: string };
           store: { showRepository: ShowRepositoryImpl };
-        }) => showRepository.getDetailDrama(id),
+        }) => showRepository.getDetail(id, lang),
         {
           params: t.Object({
             id: t.String({
@@ -33,6 +34,9 @@ export const showController = (app: Elysia) =>
               },
             }),
           }),
+          query: t.Object({
+            lang: t.Optional(t.String()),
+          }),
           transform({ params }) {
             const id = params.id;
             const newId = id.formatTitle();
@@ -49,7 +53,7 @@ export const showController = (app: Elysia) =>
         }: {
           params: { id: string };
           store: { showRepository: ShowRepositoryImpl };
-        }) => showRepository.getCastsDrama(id),
+        }) => showRepository.getCasts(id),
         {
           params: t.Object({
             id: t.String({

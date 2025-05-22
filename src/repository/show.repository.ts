@@ -4,18 +4,17 @@ import Cast from "../model/cast.model";
 import Drama from "../model/drama.model";
 import baseScrape from "../utils/baseScrape";
 import { BadRequest } from "../utils/errors";
-import { recordEntries, recordKeys, recordValues } from "../utils/record";
-import { htmlDetailDrama, htmlDetailMovie } from "../example/detailshow";
+import { recordEntries, recordKeys } from "../utils/record";
 import { NotFoundError } from "elysia";
 import { parseDateRange } from "../utils/dateRange";
 
 interface ShowRepository {
-  getDetailDrama(id: string): Promise<Drama>;
-  getCastsDrama(id: string): Promise<Cast[]>;
+  getDetail(id: string, langCode: string): Promise<Drama>;
+  getCasts(id: string): Promise<Cast[]>;
 }
 
 export default class ShowRepositoryImpl implements ShowRepository {
-  async getDetailDrama(id: string): Promise<Drama> {
+  async getDetail(id: string, langCode: string = "en"): Promise<Drama> {
     if (id.length <= 2) {
       throw new BadRequest("Id must be at least 2 characters long");
     }
@@ -25,6 +24,11 @@ export default class ShowRepositoryImpl implements ShowRepository {
       const url = `${baseUrl}/${id}`;
       const html = await baseScrape(url);
       const $ = load(html);
+      const langs = Intl.NumberFormat.supportedLocalesOf(langCode);
+
+      if (langs.length === 0) {
+        throw new BadRequest("Invalid language code");
+      }
 
       let title = $("h1").text().trim();
       let imageUrl = $(".thumb.tright .thumbimage").attr("src");
@@ -41,7 +45,9 @@ export default class ShowRepositoryImpl implements ShowRepository {
       /// Getting Profile info
       const dramaDetails: Record<string, any> = {};
 
-      $("ul li").each((_, el) => {
+      const elements = $("ul li").toArray();
+
+      for (const el of elements) {
         let key = $(el).find("b").text().replace(":", "").trim();
         let value: any = $(el).clone().children().remove().end().text().trim();
 
@@ -52,7 +58,7 @@ export default class ShowRepositoryImpl implements ShowRepository {
           .join(", ");
         if (linkText) value = linkText;
 
-        if (!key || !value) return;
+        if (!key || !value) continue;
 
         key = key.toCamelCase();
 
@@ -60,8 +66,12 @@ export default class ShowRepositoryImpl implements ShowRepository {
           value = parseInt(value, 10) || null;
         }
 
+        if (key === "language" || key === "country") {
+          value = await translate(value, langCode);
+        }
+
         dramaDetails[key] = value;
-      });
+      }
 
       recordKeys(dramaDetails).find((key) => {
         if (key == "drama") {
@@ -104,9 +114,11 @@ export default class ShowRepositoryImpl implements ShowRepository {
         .cleaned()
         .trim();
 
-      let idTranslated: string | null = null;
+      let translatedSynopsis: string | null = null;
       if (synopsisText.length > 0) {
-        idTranslated = (await translate(synopsisText, "id")).cleaned();
+        translatedSynopsis = (
+          await translate(synopsisText, langCode)
+        ).cleaned();
       }
 
       const links = synopsisElement
@@ -168,14 +180,20 @@ export default class ShowRepositoryImpl implements ShowRepository {
         ...drama,
         ...dramaDetails,
         ...{ notes },
-        ...{ synopsis: { original: synopsisText, id: idTranslated, links } },
+        ...{
+          synopsis: {
+            original: synopsisText,
+            translated: translatedSynopsis,
+            links,
+          },
+        },
       };
     } catch (error) {
       throw error;
     }
   }
 
-  async getCastsDrama(id: string): Promise<any[]> {
+  async getCasts(id: string): Promise<any[]> {
     if (id.length <= 2) {
       throw new BadRequest("Id must be at least 2 characters long");
     }
@@ -185,6 +203,46 @@ export default class ShowRepositoryImpl implements ShowRepository {
       const url = `${baseUrl}/${id}`;
       const html = await baseScrape(url);
       const $ = load(html);
+
+      let type = "Unknown";
+      const dramaDetails: Record<string, any> = {};
+
+      const elements = $("ul li").toArray();
+
+      for (const el of elements) {
+        let key = $(el).find("b").text().replace(":", "").trim();
+        let value: any = $(el).clone().children().remove().end().text().trim();
+
+        const linkText = $(el)
+          .find("a")
+          .map((_, a) => $(a).text().trim())
+          .get()
+          .join(", ");
+        if (linkText) value = linkText;
+
+        if (!key || !value) continue;
+
+        key = key.toCamelCase();
+        dramaDetails[key] = value;
+      }
+
+      recordKeys(dramaDetails).find((key) => {
+        if (key == "drama") {
+          type = "Drama";
+        } else if (key == "movie" || key == "tvMovie") {
+          type = "Movie";
+        } else if (key == "name") {
+          type = "Actrees";
+        } else {
+          type = type;
+        }
+      }) ?? "Unknown";
+
+      if (type == "Unknown" || type == "Actrees") {
+        throw new NotFoundError(
+          `Only Drama and Movie are supported. (${type})`
+        );
+      }
 
       let castData: any = [];
       let stopParsing = false;
@@ -268,6 +326,28 @@ export default class ShowRepositoryImpl implements ShowRepository {
             title,
             casts,
           });
+        }
+
+        if (title === "Cast" && table.length <= 0) {
+          const castList = $('h2:contains("Cast")').next("ul");
+          const casts: Cast[] = [];
+          castList.find("li").each((_, element) => {
+            const linkElement = $(element).find("a");
+            const name = linkElement.text().trim();
+            const id = linkElement.attr("href")?.split("/").pop();
+            const cast = $(element)
+              .text()
+              .replace(linkElement.text(), "")
+              .trim()
+              .replace("- ", "");
+
+            casts.push(new Cast(id, name, `${baseUrl}/${id}`, undefined, cast));
+          });
+          castData.push({
+            title: "Cast",
+            casts,
+          });
+          return;
         }
       });
 

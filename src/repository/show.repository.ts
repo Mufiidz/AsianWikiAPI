@@ -100,6 +100,7 @@ export default class ShowRepositoryImpl implements ShowRepository {
       }
 
       /// Getting Synopsis
+      // TODO : fix this synopsis with example heavenly ever after
       const synopsisElement = $("h2:contains('Plot Synopsis')").next("p");
 
       const synopsisText = synopsisElement
@@ -243,6 +244,8 @@ export default class ShowRepositoryImpl implements ShowRepository {
           `Only Drama and Movie are supported. (${type})`
         );
       }
+
+      /// TODO : fix isi dari castnya
 
       let castData: any = [];
       let stopParsing = false;

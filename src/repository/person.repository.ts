@@ -1,183 +1,230 @@
 import { load } from "cheerio";
 import baseScrape from "../utils/baseScrape";
 import { DateTime } from "luxon";
+import { recordEntries, recordKeys } from "../utils/record";
+import { NotFoundError } from "elysia";
+import { BadRequest } from "../utils/errors";
+import translate from "translate";
 
 interface PersonRepository {
   getDetailPerson(id: string): Promise<any>;
 }
 
 export default class PersonRepositoryImpl implements PersonRepository {
-  async getDetailPerson(id: string): Promise<any> {
+  async getDetailPerson(id: string, langCode: string = "en"): Promise<any> {
+    if (id.length <= 2) {
+      throw new BadRequest("Id must be at least 2 characters long");
+    }
     const baseUrl = Bun.env.BASE_URL;
     try {
       const url = `${baseUrl}/${id}`;
       const html = await baseScrape(url);
       const $ = load(html);
+      const langs = Intl.NumberFormat.supportedLocalesOf(langCode);
 
+      if (langs.length === 0) {
+        throw new BadRequest("Invalid language code");
+      }
+
+      let title = $("h1").text().trim();
       let imageUrl = $(".thumb.tright .thumbimage").attr("src");
+
+      if (imageUrl) {
+        imageUrl = `${baseUrl}${imageUrl}`;
+      }
+
       const ratingText = $("#w4g_rb_area-1").text().trim();
 
       const ratingMatch = ratingText.match(/(\d+)\/100/);
       const votesMatch = ratingText.match(/(\d+)\s+votes/);
 
-      const profileData: Record<string, string> = {};
-      const moviesData: Array<any> = [];
-      const dramaData: Array<any> = [];
-      const tvData: Array<any> = [];
+      const rating = ratingMatch ? parseInt(ratingMatch[1], 10) : undefined;
+      const votes = votesMatch ? parseInt(votesMatch[1], 10) : undefined;
+      let type = "Unknown";
 
-      let isProfileSection = false;
-      let isMoviesSection = false;
-      let isDramaSection = false;
-      let isTvMovieSection = false;
+      /// Getting Profile info
+      const personDetails: Record<string, any> = {};
 
-      $("h2, ul").each((_, element) => {
-        const tag = $(element).prop("tagName");
+      const profileSection = $('h2:contains("Profile")').next("ul");
+      const listItems = profileSection.find("li").toArray();
 
-        if (tag === "H2") {
-          const title = $(element).text().trim().toLowerCase();
+      for (const el of listItems) {
+        const fullText = $(el).text().trim();
+        const rawKey = $(el).find("b").text();
+        const rawValue = fullText.replace(rawKey, "").trim();
 
-          if (title === "profile") {
-            isProfileSection = true;
-          } else if (title === "notes" || title === "movies") {
-            isMoviesSection = true;
-          } else if (title === "drama series") {
-            isDramaSection = true;
-          } else if (title === "tv movies") {
-            isTvMovieSection = true;
-          } else {
-            isProfileSection = false;
-            isMoviesSection = false;
-            isDramaSection = false;
-            isTvMovieSection = false;
-          }
+        const key = rawKey.trim().toCamelCase();
+        let value: any = rawValue.trim();
+
+        if (!key) continue;
+
+        if (key === "born") {
+          value = DateTime.fromFormat(value, "LLLL d, yyyy").toISO();
         }
 
-        if (isProfileSection && tag === "UL") {
-          $(element)
-            .find("li")
-            .each((_, el) => {
-              let key = $(el).find("b").text().replace(":", "").trim();
-              let value: any = $(el)
-                .clone()
-                .children()
-                .remove()
-                .end()
-                .text()
-                .trim();
-
-              const linkText = $(el)
-                .find("a")
-                .map((_, a) => $(a).text().trim())
-                .get()
-                .join(", ");
-              if (linkText) value = linkText;
-
-              if (!key || !value) return;
-
-              key = key.toCamelCase();
-
-              if (key === "birthdate") {
-                value = DateTime.fromFormat(value, "MMMM d, yyyy");
-              }
-
-              profileData[key] = value;
-            });
+        if (key === "height") {
+          value = value ? parseInt(value, 10) : null;
+          console.log("height", value);
         }
 
-        if (isMoviesSection && tag === "UL") {
-          $(element)
-            .find("li")
-            .each((_, li) => {
-              const aTag = $(li).find("a");
-              const title = aTag.text().trim();
-              let id = aTag.attr("href") || null;
-              id = id?.split("/").pop() || null;
-              const detail = $(li).text().replace(`${title} |`, "").trim();
-
-              if (title) {
-                moviesData.push({ id, title, detail });
-              }
-            });
+        if (key === "birthplace" || key === "university") {
+          value = await translate(value, langCode);
         }
 
-        if (isDramaSection && tag === "UL") {
-          $(element)
-            .find("li")
-            .each((_, li) => {
-              const aTag = $(li).find("a");
-              const title = aTag.text().trim();
-              let id = aTag.attr("href") || null;
-              id = id?.split("/").pop() || null;
-              const detail = $(li).text().replace(`${title} |`, "").trim();
+        console.log({ key, value });
+        personDetails[key] = value ? value : null;
+      }
 
-              if (title) {
-                dramaData.push({ id, title, detail });
-              }
-            });
+      // ✅ Tambahkan default null untuk social fields jika belum ada
+      const socialKeys = ["facebook", "instagram", "tiktok", "x"];
+      for (const key of socialKeys) {
+        if (!(key in personDetails)) {
+          personDetails[key] = null;
         }
+      }
 
-        if (isTvMovieSection && tag === "UL") {
-          $(element)
-            .find("li")
-            .each((_, li) => {
-              const aTag = $(li).find("a");
-              const title = aTag.text().trim();
-              let id = aTag.attr("href") || null;
-              id = id?.split("/").pop() || null;
-              const detail = $(li).text().replace(`${title} |`, "").trim();
-
-              if (title) {
-                tvData.push({ id, title, detail });
-              }
-            });
+      /// replace some keys
+      recordKeys(personDetails).find((key) => {
+        if (key.contain("hangul", false) || key.contain("japanese", false)) {
+          personDetails["nativeName"] = personDetails[key];
+          delete personDetails[key];
         }
       });
 
-      const notes: {}[] = [];
-      // Cari elemen h2 dengan id Notes
-      const notesSection = $("h2:has(span#Notes)");
-
-      if (notesSection.length === 0) {
-        return []; // Jika tidak ditemukan, kembalikan array kosong
-      }
-
-      // Ambil semua elemen setelah h2 Notes hingga h2 berikutnya
-      let currentElement = notesSection.next();
-      while (currentElement.length && !currentElement.is("h2")) {
-        if (currentElement.is("ol")) {
-          currentElement.find("li").each((_, li) => {
-            const text = $(li).text().trim();
-            const links: { title: string; url: string }[] = [];
-
-            $(li)
-              .find("a")
-              .each((_, a) => {
-                const title = $(a).text().trim();
-                const url = $(a).attr("href") || "";
-                links.push({ title, url });
-              });
-
-            notes.push({ text, links });
-          });
+      for (const [key, value] of recordEntries(personDetails)) {
+        if (typeof value === "string") {
+          personDetails[key] = value.cleaned();
         }
-        currentElement = currentElement.next();
       }
 
-      const rating = ratingMatch ? parseInt(ratingMatch[1], 10) : null;
-      const votes = votesMatch ? parseInt(votesMatch[1], 10) : null;
-      if (imageUrl) {
-        imageUrl = `${baseUrl}${imageUrl}`;
+      recordKeys(personDetails).find((key) => {
+        if (key == "drama") {
+          type = "Drama";
+        } else if (key == "movie" || key == "tvMovie") {
+          type = "Movie";
+        } else if (key == "name") {
+          type = "Actrees";
+        } else {
+          type = type;
+        }
+      }) ?? "Unknown";
+
+      if (type != "Actrees") {
+        throw new NotFoundError(`Only Actrees are supported. (${type})`);
       }
+
+      personDetails["type"] = type;
+
+      let biographies: string[] | null = null;
+
+      /// Getting Biography
+      const biographyElements = $('h2:contains("Biography")').first();
+
+      let nextBiography = biographyElements.next();
+
+      while (nextBiography.length && nextBiography[0].tagName !== "h2") {
+        if (nextBiography.is("p")) {
+          let biography = $.text(nextBiography)
+            .replace(/\n/g, "") // remove newlines
+            .replace(/\s{2,}/g, " ") // collapse multiple spaces
+            .replace(/\[\d+\]/g, "") // remove square brackets
+            .trim();
+
+          biography = await translate(biography, langCode);
+
+          biographies = biographies ? [...biographies, biography] : [biography];
+        }
+
+        nextBiography = nextBiography.next();
+      }
+
+      /// Getting Notes
+      const notesElement = $("h2:contains('Notes')");
+
+      const notesHtml = $.html(notesElement.next("ol"))
+        .replace(/\n/g, "") // remove newlines
+        .replace(/\s{2,}/g, " ") // collapse multiple spaces
+        .replace(/>\s+</g, "><") // remove space between tags
+        .trim();
+
+      const notes = notesHtml ? notesHtml : null;
+
+      const shows: {}[] = [];
+
+      const h2Elements = $("h2").toArray();
+
+      for (const el of h2Elements) {
+        const sectionTitle = $(el).text().trim();
+
+        // Skip jika judulnya "Profile"
+        const lowerSectionTitle = sectionTitle.toLowerCase();
+        if (
+          lowerSectionTitle === "profile" ||
+          lowerSectionTitle === "awards" ||
+          lowerSectionTitle === "references"
+        ) {
+          continue;
+        }
+
+        const ul = $(el).next("ul");
+
+        // Skip jika tidak ada <ul> atau tidak ada <li> di dalam <ul>
+        if (!ul.length || ul.find("li").length === 0) continue;
+
+        const items: {
+          id: string | null;
+          title: string | null;
+          altTitle: string | null;
+          network: string | null;
+          year: number | null;
+          cast: string | null;
+        }[] = [];
+
+        /// regex for detailing show
+        const regex =
+          /^(.+?)\s*(?:\|\s*(.+?))?\s*\((?:(.+?)\/\s*)?(\d{4})\)\s*-\s*(.+)$/;
+
+        ul.find("li").each((_, li) => {
+          const anchor = $(li).find("a").first();
+          const id = anchor.attr("href")?.replace(/^\//, "") || null;
+
+          const fullText = $(li).text().trim();
+          const match = fullText.match(regex);
+          if (match) {
+            const [, title, altTitle, network, year, cast] = match;
+            items.push({
+              id: id ? id.trim() : null,
+              title: title ? title.trim() : null,
+              altTitle: altTitle ? altTitle.trim() : null,
+              network: network ? network.trim() : null,
+              year: year ? +year.trim() : null,
+              cast: cast ? cast.trim() : null,
+            });
+          }
+        });
+
+        let translatedSectionTitle = await translate(sectionTitle, langCode);
+        translatedSectionTitle = translatedSectionTitle.capitalEachWord();
+
+        shows.push({
+          section: translatedSectionTitle,
+          items,
+        });
+      }
+
+      /// Getting Awards
+      // TODO : get awards
 
       return {
-        ...profileData,
+        id,
+        title,
         imageUrl,
+        ...personDetails,
         rating,
         votes,
+        biographies,
         notes,
-        movies: moviesData,
-        dramas: dramaData,
-        tvMovies: tvData,
+        shows,
       };
     } catch (error) {
       throw error;

@@ -6,6 +6,7 @@ interface String {
   contain(value: string, caseSensitive?: boolean): boolean;
   cleaned(): string;
   onlyAlphanumeric(): string;
+  capitalEachWord(): string;
 }
 
 String.prototype.toCamelCase = function (): string {
@@ -87,3 +88,15 @@ String.prototype.cleaned = function (): string {
 String.prototype.onlyAlphanumeric = function (): string {
   return this.replace(/[^a-zA-Z0-9 ]/g, "").trim();
 };
+
+String.prototype.capitalEachWord = function (): string {
+  return this
+    .split(" ")
+    .map(word =>
+      word.length > 0
+        ? word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+        : ""
+    )
+    .join(" ");
+};
+

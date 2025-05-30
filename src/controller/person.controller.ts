@@ -9,11 +9,13 @@ export const personController = (app: Elysia) => {
         "/:id",
         async ({
           params: { id },
+          query: { lang },
           store: { personRepository },
         }: {
           params: { id: string };
+          query: { lang: string };
           store: { personRepository: PersonRepositoryImpl };
-        }) => personRepository.getDetailPerson(id),
+        }) => personRepository.getDetailPerson(id, lang),
         {
           params: t.Object({
             id: t.String({
@@ -32,10 +34,13 @@ export const personController = (app: Elysia) => {
               },
             }),
           }),
+          query: t.Object({
+            lang: t.Optional(t.String()),
+          }),
           transform({ params }) {
-              const { id } = params;
-              params.id = id.formatTitle();
-          }
+            const { id } = params;
+            params.id = id.formatTitle();
+          },
         }
       )
     );

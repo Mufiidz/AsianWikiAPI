@@ -100,35 +100,54 @@ export default class ShowRepositoryImpl implements ShowRepository {
       }
 
       /// Getting Synopsis
-      // TODO : fix this synopsis with example heavenly ever after
-      const synopsisElement = $("h2:contains('Plot Synopsis')").next("p");
+      const synopsisTexts: string[] = [];
+      const synopsisLinks: {}[] = [];
+      const synopsisElement = $("h2:contains('Plot Synopsis')");
 
-      const synopsisText = synopsisElement
-        .clone()
-        .children("a")
-        .replaceWith(function () {
-          return `${$(this).text().trim()}`;
-        })
-        .remove()
-        .end()
-        .text()
-        .cleaned()
-        .trim();
+      synopsisElement.nextAll().each(function () {
+        const tag = this.tagName.toLowerCase();
+        if (tag === "p") {
+          const cleanText = $(this)
+            .clone()
+            .children("a")
+            .replaceWith(function () {
+              return $(this).text().trim();
+            })
+            .end()
+            .text()
+            .trim();
 
-      let translatedSynopsis: string | null = null;
-      if (synopsisText.length > 0) {
-        translatedSynopsis = (
-          await translate(synopsisText, langCode)
-        ).cleaned();
+          $(this)
+            .find("a")
+            .each(function () {
+              synopsisLinks.push({
+                name: $(this).text().trim(),
+                url: `${baseUrl}${$(this).attr("href")}`,
+              });
+            });
+
+          if (cleanText) {
+            synopsisTexts.push(cleanText);
+          }
+        } else {
+          return false;
+        }
+      });
+
+      const synopsisTranslated: string[] = [];
+      if (synopsisTexts.length > 0) {
+        console.log({ synopsisTexts });
+
+        for (const synopsisText of synopsisTexts) {
+          const translated = (
+            await translate(synopsisText, langCode)
+          ).cleaned();
+
+          if (translated) {
+            synopsisTranslated.push(translated);
+          }
+        }
       }
-
-      const links = synopsisElement
-        .find("a")
-        .map((_, el) => ({
-          name: $(el).text().trim(),
-          url: `${baseUrl}${$(el).attr("href")}`,
-        }))
-        .get();
 
       /// Getting Image
       if (imageUrl) {
@@ -183,9 +202,9 @@ export default class ShowRepositoryImpl implements ShowRepository {
         ...{ notes },
         ...{
           synopsis: {
-            original: synopsisText,
-            translated: translatedSynopsis,
-            links,
+            original: synopsisTexts,
+            translated: synopsisTranslated,
+            links: synopsisLinks,
           },
         },
       };
@@ -194,7 +213,8 @@ export default class ShowRepositoryImpl implements ShowRepository {
     }
   }
 
-  async getCasts(id: string): Promise<any[]> {
+    // TODO : fix this casts with example [Parasite](https://asianwiki.com/Parasite_(Korean_Movie))
+    async getCasts(id: string): Promise<any[]> {
     if (id.length <= 2) {
       throw new BadRequest("Id must be at least 2 characters long");
     }

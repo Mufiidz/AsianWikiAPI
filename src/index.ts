@@ -10,7 +10,11 @@ import { dramasController } from "./controller/dramas.controller";
 import { showController } from "./controller/show.controller";
 import { personController } from "./controller/person.controller";
 
-const app = new Elysia()
+const app = new Elysia({
+  serve: {
+    idleTimeout: 30
+  }
+})
   .use(
     swagger({
       path: "/docs",

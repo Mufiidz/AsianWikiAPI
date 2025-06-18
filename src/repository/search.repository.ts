@@ -1,39 +1,22 @@
 import { load } from "cheerio";
 import baseScrape from "../utils/baseScrape";
-
-enum SearchType {
-  DEFAULT = "default",
-  IMAGE = "images",
-}
+import { SearchType } from "../model/searchType";
+import Search from "../model/searchModel";
 
 interface SearchRepository {
-  searchAll(query: string): Promise<any>;
-  searchTitle(title: string): Promise<any[]>;
-  searchText(text: string): Promise<any[]>;
+  searchAll(query: string): Promise<Search[]>;
   getImageDrama(query: string): Promise<string | null>;
 }
 
 export default class SearchRepositoryImpl implements SearchRepository {
-  async searchAll(query: string): Promise<any> {
+  async searchAll(title: string, type?: string): Promise<Search[]> {
     try {
-      const dramas = await this.searchTitle(query);
-      const texts = await this.searchText(query);
-      return {
-        titles: dramas,
-        texts,
-      };
-    } catch (error) {
-      throw error;
-    }
-  }
-  async searchTitle(title: string): Promise<any[]> {
-    try {
-      const html = await baseScrape(
-        `${this.baseUrl(title, SearchType.DEFAULT)}`
-      );
+      const baseUrl = this.baseUrl(title);
+      console.log({ baseUrl });
+      const html = await baseScrape(baseUrl);
       const $ = load(html);
 
-      const results: {}[] = [];
+      const results: Search[] = [];
 
       const elementTitle = $('h2:contains("Page title matches")');
       const isTitleExists = elementTitle.length === 1;
@@ -54,16 +37,31 @@ export default class SearchRepositoryImpl implements SearchRepository {
           /(?:ImagePortrait\|File:|Image:|File:)([^|\}\n]+?\.(jpg|jpeg|png))/i
         );
 
-        if (!isImgFile) continue;
-
         const imgFileName = isImgFile ? isImgFile[1] : null;
-        const match = description.match(/'''(Drama|Movie):'''\s*(.+)/);
+        let match: RegExpMatchArray | null = null;
 
-        if (!match || !imgFileName) continue;
+        switch (type) {
+          case SearchType.DRAMA:
+            match = description.match(/'''(Drama):'''\s*(.+)/);
+            break;
+          case SearchType.MOVIE:
+            match = description.match(/'''(Movie):'''\s*(.+)/);
+            break;
+          case SearchType.NAME:
+            match = description.match(/'''(Name):'''\s*(.+)/);
+            break;
+          default:
+            match = description.match(/'''(Drama|Movie|Name):'''\s*(.+)/);
+            break;
+        }
 
-        const image = await this.getImageDrama(imgFileName);
+        if (!match) continue;
 
-        if (!image) continue;
+        let image = null;
+
+        if (imgFileName) {
+          image = await this.getImageDrama(imgFileName);
+        }
 
         results.push({
           id: link.replace(/\//g, ""),
@@ -78,47 +76,10 @@ export default class SearchRepositoryImpl implements SearchRepository {
       throw error;
     }
   }
-  async searchText(text: string): Promise<any[]> {
-    try {
-      const html = await baseScrape(`${this.baseUrl}&search=${text}`);
-      const $ = load(html);
-
-      const results: {}[] = [];
-
-      const elementTitle = $('h2:contains("Page text matches")');
-      const isTitleExists = elementTitle.length === 1;
-
-      if (!isTitleExists) return results;
-
-      elementTitle
-        .next("ul.mw-search-results")
-        .find("li")
-        .each((_index, element) => {
-          const titleElement = $(element).find(".mw-search-result-heading a");
-          const title = titleElement.text().trim();
-          const link = titleElement.attr("href") || "";
-          let description = $(element).find(".searchresult").text().trim();
-          description = description.replace(/\*\s*\[\[(.*?)\]\]/, "$1");
-
-          if (title.toLocaleLowerCase().startsWith(text.toLocaleLowerCase()))
-            return;
-
-          results.push({
-            title,
-            link: `${Bun.env.BASE_URL}${link}`,
-            description,
-          });
-        });
-
-      return results;
-    } catch (error) {
-      throw error;
-    }
-  }
 
   async getImageDrama(query: string): Promise<string | null> {
     try {
-      const baseUrl = this.baseUrl(query, SearchType.IMAGE);
+      const baseUrl = this.baseUrl(query, true);
       console.log({ baseUrl });
       const html = await baseScrape(baseUrl);
 
@@ -164,11 +125,10 @@ export default class SearchRepositoryImpl implements SearchRepository {
     }
   }
 
-  baseUrl = (
-    search: string,
-    searchType: SearchType = SearchType.DEFAULT
-  ): string =>
+  baseUrl = (search: string, isImage: boolean = false): string =>
     search.isEmpty()
       ? ""
-      : `${Bun.env.BASE_URL}/index.php?profile=${searchType}&fulltext=Search&search=${search}`;
+      : `${Bun.env.BASE_URL}/index.php?profile=${
+          isImage ? "images" : "default"
+        }&fulltext=Search&search=${search}`;
 }

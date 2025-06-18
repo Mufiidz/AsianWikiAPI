@@ -5,6 +5,7 @@ import Search from "../model/searchModel";
 
 interface SearchRepository {
   searchAll(query: string): Promise<Search[]>;
+  getImageSearch(fileName: string): Promise<string | null>;
   getImageDrama(query: string): Promise<string | null>;
 }
 
@@ -12,7 +13,6 @@ export default class SearchRepositoryImpl implements SearchRepository {
   async searchAll(title: string, type?: string): Promise<Search[]> {
     try {
       const baseUrl = this.baseUrl(title);
-      console.log({ baseUrl });
       const html = await baseScrape(baseUrl);
       const $ = load(html);
 
@@ -60,7 +60,9 @@ export default class SearchRepositoryImpl implements SearchRepository {
         let image = null;
 
         if (imgFileName) {
-          image = await this.getImageDrama(imgFileName);
+          image =
+            (await this.getImageSearch(imgFileName)) ||
+            (await this.getImageDrama(imgFileName));
         }
 
         results.push({
@@ -72,6 +74,25 @@ export default class SearchRepositoryImpl implements SearchRepository {
         });
       }
       return results;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async getImageSearch(fileName: string): Promise<string | null> {
+    try {
+      fileName = encodeURIComponent(fileName);
+      const baseUrl = `${Bun.env.BASE_URL}/File:${fileName}`;
+      const html = await baseScrape(baseUrl);
+      const $ = load(html);
+
+      const imageLink = $(".fullMedia a").attr("href");
+
+      if (imageLink) {
+        return `${Bun.env.BASE_URL}${imageLink}`;
+      }
+
+      return null;
     } catch (error) {
       throw error;
     }

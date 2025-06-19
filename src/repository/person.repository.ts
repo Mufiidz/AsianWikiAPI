@@ -59,7 +59,12 @@ export default class PersonRepositoryImpl implements PersonRepository {
         if (!key) continue;
 
         if (key === "born") {
-          value = DateTime.fromFormat(value, "LLLL d, yyyy").toISO();
+          const birthDate = DateTime.fromFormat(value, "LLLL d, yyyy");
+          value = birthDate.toISO();
+
+          const age = DateTime.now().diff(birthDate, "years").years;
+          const roundedAge = Math.floor(age);
+          personDetails["age"] = roundedAge;
         }
 
         if (key === "height") {
@@ -71,7 +76,6 @@ export default class PersonRepositoryImpl implements PersonRepository {
           value = await translate(value, langCode);
         }
 
-        console.log({ key, value });
         personDetails[key] = value ? value : null;
       }
 
@@ -118,7 +122,7 @@ export default class PersonRepositoryImpl implements PersonRepository {
       let biographies: string[] | null = null;
 
       /// Getting Biography
-      const biographyElements = $('h2:contains("Biography")').first();
+      const biographyElements = $('h2:contains("Bio")').first();
 
       let nextBiography = biographyElements.next();
 
@@ -151,18 +155,22 @@ export default class PersonRepositoryImpl implements PersonRepository {
 
       const shows: {}[] = [];
 
-      const h2Elements = $("h2").toArray();
+      const h2Elements = $("h2, h3").toArray();
 
       for (const el of h2Elements) {
         const sectionTitle = $(el).text().trim();
+        const lowerSectionTitle = sectionTitle.toLowerCase();
 
         // Skip jika judulnya "Profile"
-        const lowerSectionTitle = sectionTitle.toLowerCase();
-        if (
-          lowerSectionTitle === "profile" ||
-          lowerSectionTitle === "awards" ||
-          lowerSectionTitle === "references"
-        ) {
+        const skippedSections = [
+          "profile",
+          "awards",
+          "references",
+          "external links",
+          "director",
+          "screenwriter",
+        ];
+        if (skippedSections.includes(lowerSectionTitle)) {
           continue;
         }
 

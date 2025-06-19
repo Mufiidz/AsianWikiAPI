@@ -1,4 +1,4 @@
-import { load } from "cheerio";
+import { CheerioAPI, load } from "cheerio";
 import translate from "translate";
 import Cast from "../model/cast.model";
 import Drama from "../model/drama.model";
@@ -213,170 +213,163 @@ export default class ShowRepositoryImpl implements ShowRepository {
     }
   }
 
-    // TODO : fix this casts with example [Parasite](https://asianwiki.com/Parasite_(Korean_Movie))
-    async getCasts(id: string): Promise<any[]> {
+  async getCasts(id: string): Promise<any[]> {
     if (id.length <= 2) {
       throw new BadRequest("Id must be at least 2 characters long");
     }
 
-    try {
-      const baseUrl = Bun.env.BASE_URL;
-      const url = `${baseUrl}/${id}`;
-      const html = await baseScrape(url);
-      const $ = load(html);
+    const baseUrl = Bun.env.BASE_URL;
+    const url = `${baseUrl}/${id}`;
+    const html = await baseScrape(url);
+    const $ = load(html);
 
-      let type = "Unknown";
-      const dramaDetails: Record<string, any> = {};
+    checkIsShow(id, $);
 
-      const elements = $("ul li").toArray();
+    const castData: { title: string; casts: Cast[] }[] = [];
+    let parsingCast = false;
 
-      for (const el of elements) {
-        let key = $(el).find("b").text().replace(":", "").trim();
-        let value: any = $(el).clone().children().remove().end().text().trim();
+    $("h2, h3, p b").each((_, element) => {
+      const title = $(element).text().trim();
 
-        const linkText = $(el)
-          .find("a")
-          .map((_, a) => $(a).text().trim())
-          .get()
-          .join(", ");
-        if (linkText) value = linkText;
-
-        if (!key || !value) continue;
-
-        key = key.toCamelCase();
-        dramaDetails[key] = value;
+      if (title === "Cast") {
+        parsingCast = true;
+      } else if (title.startsWith("Additional Cast")) {
+        parsingCast = false;
+        return false;
       }
 
-      recordKeys(dramaDetails).find((key) => {
-        if (key == "drama") {
-          type = "Drama";
-        } else if (key == "movie" || key == "tvMovie") {
-          type = "Movie";
-        } else if (key == "name") {
-          type = "Actrees";
-        } else {
-          type = type;
-        }
-      }) ?? "Unknown";
+      if (!parsingCast) return;
 
-      if (type == "Unknown" || type == "Actrees") {
-        throw new NotFoundError(
-          `Only Drama and Movie are supported. (${type})`
-        );
-      }
+      let current = $(element).next();
+      const isList = current.is("ul, ol");
 
-      /// TODO : fix isi dari castnya
-
-      let castData: any = [];
-      let stopParsing = false;
-
-      $("h2, h3, p b").each((_, element) => {
-        const title = $(element).text().trim();
-        const table = $(element).next("table");
-
-        if (title === "Additional Cast Members:") {
-          stopParsing = true;
-
-          const additionalCast: any[] = [];
-
-          const additionalCastSection = $(
-            'p:contains("Additional Cast Members")'
-          ).next("ul");
-
-          additionalCastSection.find("li").each((index, element) => {
-            const linkElement = $(element).find("a");
+      if (isList) {
+        const casts = current
+          .find("li")
+          .map((_, li) => {
+            const linkElement = $(li).find("a");
             const name = linkElement.text().trim();
             const id = linkElement.attr("href")?.split("/").pop();
-            const cast = $(element)
+            const cast = $(li)
               .text()
               .replace(linkElement.text(), "")
               .trim()
               .replace("- ", "");
+            return new Cast(id, name, `${baseUrl}/${id}`, undefined, cast);
+          })
+          .get();
 
-            additionalCast.push(
-              new Cast(id, name, `${baseUrl}/${id}`, undefined, cast)
-            );
-          });
+        castData.push({ title, casts });
+        return false;
+      }
 
-          castData.push({
-            title: "Additional Cast Members",
-            casts: additionalCast,
-          });
+      const links: any[] = [];
+      const names: string[] = [];
+      const characters: string[] = [];
 
-          return;
-        }
-
-        if (stopParsing) return;
-
-        if (table.length) {
-          const ids: string[] = [];
-          const actors: string[] = [];
-          const profileUrls: string[] = [];
-          const images: string[] = [];
-          const characters: string[] = [];
-
-          table.find("tr:nth-last-of-type(2) td a").each((_, el) => {
-            const id = $(el).attr("href")?.split("/").pop();
-            actors.push($(el).text().trim());
-            ids.push(id || "");
-            profileUrls.push(`${baseUrl}/${id}`);
-          });
-
-          table.find("tr:nth-of-type(2) td img").each((_, el) => {
-            let imgSrc = $(el).attr("src");
-            if (imgSrc && !imgSrc.startsWith("http")) {
-              imgSrc = `${baseUrl}${imgSrc}`;
+      while (
+        current.length &&
+        !["h2", "h3"].includes(current[0].tagName?.toLowerCase())
+      ) {
+        if (current[0].tagName?.toLowerCase() === "table") {
+          current.find("tr").each((index, row) => {
+            const cells = $(row).find("td");
+            if (index === 1) {
+              cells.find("a").each((_, a) => {
+                const href = $(a).attr("href");
+                const id = href?.split("/").pop();
+                const profileUrl = href?.startsWith("http")
+                  ? href
+                  : `${baseUrl}${href}`;
+                const imageUrl = $(a).find("img").attr("src");
+                links.push({
+                  id,
+                  profileUrl,
+                  imageUrl: imageUrl ? `${baseUrl}${imageUrl}` : null,
+                });
+              });
+            } else if (index === 2) {
+              names.push(...cells.map((_, td) => $(td).text().trim()).get());
+            } else if (index === 3) {
+              characters.push(
+                ...cells.map((_, td) => $(td).text().trim()).get()
+              );
             }
-            images.push(imgSrc || "");
-          });
-
-          table.find("tr:last-of-type td").each((_, el) => {
-            characters.push($(el).text().trim());
-          });
-
-          const casts = actors.map((actor, index) => {
-            if (!actor || !ids[index]) return;
-            return new Cast(
-              ids[index],
-              actor,
-              profileUrls[index],
-              images[index],
-              characters[index]
-            );
-          });
-
-          castData.push({
-            title,
-            casts,
           });
         }
+        current = current.next();
+      }
 
-        if (title === "Cast" && table.length <= 0) {
-          const castList = $('h2:contains("Cast")').next("ul");
-          const casts: Cast[] = [];
-          castList.find("li").each((_, element) => {
-            const linkElement = $(element).find("a");
-            const name = linkElement.text().trim();
-            const id = linkElement.attr("href")?.split("/").pop();
-            const cast = $(element)
-              .text()
-              .replace(linkElement.text(), "")
-              .trim()
-              .replace("- ", "");
+      const casts = links.map((link, index) => ({
+        ...link,
+        name: names[index],
+        cast: characters[index],
+      }));
 
-            casts.push(new Cast(id, name, `${baseUrl}/${id}`, undefined, cast));
-          });
-          castData.push({
-            title: "Cast",
-            casts,
-          });
-          return;
-        }
+      castData.push({ title, casts });
+    });
+
+    const additionalCast = $('p:contains("Additional Cast Members") + ul li')
+      .map((_, li) => {
+        const linkElement = $(li).find("a");
+        const name = linkElement.text().trim();
+        const id = linkElement.attr("href")?.split("/").pop();
+        const cast = $(li)
+          .text()
+          .replace(linkElement.text(), "")
+          .trim()
+          .replace("- ", "");
+        return new Cast(id, name, `${baseUrl}/${id}`, undefined, cast);
+      })
+      .get();
+
+    if (additionalCast.length) {
+      castData.push({
+        title: "Additional Cast Members",
+        casts: additionalCast,
       });
-
-      return castData;
-    } catch (error) {
-      throw error;
     }
+
+    return castData.filter((cast) => cast.casts.length > 0);
+  }
+}
+
+function checkIsShow(id: string, $: CheerioAPI) {
+  let type = "Unknown";
+  const dramaDetails: Record<string, any> = {};
+
+  const elements = $("ul li").toArray();
+
+  for (const el of elements) {
+    let key = $(el).find("b").text().replace(":", "").trim();
+    let value: any = $(el).clone().children().remove().end().text().trim();
+
+    const linkText = $(el)
+      .find("a")
+      .map((_, a) => $(a).text().trim())
+      .get()
+      .join(", ");
+    if (linkText) value = linkText;
+
+    if (!key || !value) continue;
+
+    key = key.toCamelCase();
+    dramaDetails[key] = value;
+  }
+
+  recordKeys(dramaDetails).find((key) => {
+    if (key == "drama") {
+      type = "Drama";
+    } else if (key == "movie" || key == "tvMovie") {
+      type = "Movie";
+    } else if (key == "name") {
+      type = "Actrees";
+    } else {
+      type = type;
+    }
+  }) ?? "Unknown";
+
+  if (type == "Unknown" || type == "Actrees") {
+    throw new NotFoundError(`Only Drama and Movie are supported. (${type})`);
   }
 }

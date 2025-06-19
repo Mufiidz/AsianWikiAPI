@@ -22,16 +22,16 @@ export const dramasController = (app: Elysia) => {
           "/upcoming",
           async ({
             store: { asianWikiRepository },
-            query,
+            query: { month, page, isDrama },
             logestic,
           }: {
             store: { asianWikiRepository: AsianwikiRepositoryImpl };
-            query: { month: number; page: number };
+            query: { month: number; page: number; isDrama: boolean };
             logestic: Logestic;
           }) => {
-            const dt = DateTime.now().set({ month: query.month });
-            const month = dt.toFormat("MMMM");
-            return asianWikiRepository.getUpcoming(month, query.page);
+            const dt = DateTime.now().set({ month: month });
+            const newMonth = dt.toFormat("MMMM");
+            return asianWikiRepository.getUpcoming(newMonth, isDrama, page);
           },
           {
             query: t.Object({
@@ -51,6 +51,29 @@ export const dramasController = (app: Elysia) => {
                   }
                 },
               }),
+              isDrama: t.Optional(
+                t.Boolean({
+                  default: true,
+                  error({
+                    errors,
+                    value,
+                  }: {
+                    errors: any[];
+                    value: { isDrama: boolean };
+                  }) {
+                    const valueError = errors[0];
+                    const errorMessage = valueError.summary;
+
+                    if (
+                      errorMessage ===
+                      "Property 'isDrama' should be one of: 'boolean', 'boolean'"
+                    ) {
+                      return "Property 'isDrama' should be one of: 'true', 'false'";
+                    }
+                    return errorMessage;
+                  },
+                })
+              ),
               page: t.Optional(
                 t.Number({
                   minimum: 1,
@@ -67,8 +90,9 @@ export const dramasController = (app: Elysia) => {
               ),
             }),
             transform({ query }) {
-              const newMonth = +query.month;
-              const newPage = +(query.page ?? 1);
+              const { month, page, isDrama } = query;
+              const newMonth = +month;
+              const newPage = +(page ?? 1);
 
               query.month = newMonth;
               query.page = newPage;

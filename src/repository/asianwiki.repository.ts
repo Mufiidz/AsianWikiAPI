@@ -1,19 +1,19 @@
 import { load } from "cheerio";
 import Drama from "../model/drama.model";
 import Upcoming from "../model/upcoming.model";
-import { BadRequest } from "../utils/errors";
-import translate from "translate";
-import Cast from "../model/cast.model";
 import baseScrape from "../utils/baseScrape";
 import SearchRepositoryImpl from "./search.repository";
-import { DateTime } from "luxon";
 import { Page, PagedData } from "../model/pageddata.model";
 import { parseDateRange } from "../utils/dateRange";
 
 interface AsianwikiRepository {
   slider(): Promise<Drama[]>;
   upcoming(month: string): Promise<Upcoming[]>;
-  getUpcoming(month: string, page: number): Promise<PagedData<{}>>;
+  getUpcoming(
+    month: string,
+    isDrama: boolean,
+    page: number
+  ): Promise<PagedData<{}>>;
 }
 
 export default class AsianwikiRepositoryImpl implements AsianwikiRepository {
@@ -75,11 +75,17 @@ export default class AsianwikiRepositoryImpl implements AsianwikiRepository {
     }
   }
 
-  async getUpcoming(month: string, page: number = 1): Promise<PagedData<{}>> {
+  async getUpcoming(
+    month: string,
+    isDrama: boolean = true,
+    page: number = 1
+  ): Promise<PagedData<{}>> {
     try {
       console.log({ month });
       const html = await baseScrape(
-        `${Bun.env.BASE_URL}/Template:UpcomingDramas${month}`
+        `${Bun.env.BASE_URL}/Template:Upcoming${
+          isDrama ? "Dramas" : "Movies"
+        }${month}`
       );
 
       const $ = load(html);
@@ -130,6 +136,7 @@ export default class AsianwikiRepositoryImpl implements AsianwikiRepository {
                 title,
                 imageUrl: null,
                 ...{
+                  type: isDrama ? "Drama" : "Movie",
                   link,
                   network,
                   week: currentWeek,

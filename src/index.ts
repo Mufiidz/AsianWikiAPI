@@ -6,14 +6,14 @@ import {
   useSuccessResponse,
 } from "./middleware/response.midleware";
 import { searchController } from "./controller/search.controller";
-import { dramasController } from "./controller/dramas.controller";
+import { asianWikiController } from "./controller/asianwiki.controller";
 import { showController } from "./controller/show.controller";
 import { personController } from "./controller/person.controller";
 
 const app = new Elysia({
   serve: {
-    idleTimeout: 30
-  }
+    idleTimeout: 30,
+  },
 })
   .use(
     swagger({
@@ -33,7 +33,7 @@ const app = new Elysia({
   .use(useSuccessResponse)
   .use(useErrorResponse)
   .use(searchController)
-  .use(dramasController)
+  .use(asianWikiController)
   .use(showController)
   .use(personController)
   .listen(3000);

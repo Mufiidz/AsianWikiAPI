@@ -14,6 +14,7 @@ interface AsianwikiRepository {
     isDrama: boolean,
     page: number
   ): Promise<PagedData<{}>>;
+  getAllUpcoming(month: string, page: number): Promise<PagedData<{}>>;
 }
 
 export default class AsianwikiRepositoryImpl implements AsianwikiRepository {
@@ -73,6 +74,103 @@ export default class AsianwikiRepositoryImpl implements AsianwikiRepository {
     } catch (error) {
       throw error;
     }
+  }
+
+  async getAllUpcoming(
+    month: string,
+    page: number = 1
+  ): Promise<PagedData<{}>> {
+    console.log({ month }); // Log bulan untuk debugging
+
+    const types = ["Drama", "Movie"];
+    const pageSize = 5;
+    const allDramas: {
+      id: string;
+      title: string;
+      imageUrl: string | null;
+      type: string;
+    }[] = [];
+
+    for (const type of types) {
+      const html = await baseScrape(
+        `${Bun.env.BASE_URL}/Template:Upcoming${
+          type === "Drama" ? "Dramas" : "Movies"
+        }${month}`
+      );
+      const $ = load(html);
+
+      // Proses setiap kolom konten
+      $('#mw-content-text > div[style*="width: 50%"] > ul').each((_, ul) => {
+        let currentWeek: string | null = null;
+
+        $(ul)
+          .contents()
+          .each((_, node) => {
+            if (node.type === "text") {
+              const possibleWeek = $(node).text().trim();
+              if (possibleWeek) {
+                currentWeek = possibleWeek.replace(/^"+|"+$/g, "").trim();
+              }
+            }
+
+            // Proses list item dalam ul
+            if (node.type === "tag" && node.name === "ul") {
+              $(node)
+                .find("li")
+                .each((_, li) => {
+                  const parentText = $(li).text().trim();
+                  const element = load(parentText);
+                  const aTag = element("a");
+                  const title = aTag.text().replace(/\s+|_/g, " ").trim();
+                  const link = aTag.attr("href")?.trim() || "";
+                  const id = link.split("/").pop();
+                  const networkMatch = parentText.match(/\(([^()]+)\)$/);
+                  const network = networkMatch?.[1] ?? null;
+
+                  if (id && title && link) {
+                    allDramas.push({
+                      id,
+                      title,
+                      imageUrl: null,
+                      type: type === "Drama" ? "Drama" : "Movie",
+                      ...{
+                        link,
+                        network,
+                        week: currentWeek,
+                        weekRange: currentWeek
+                          ? parseDateRange(currentWeek)
+                          : null,
+                      },
+                    });
+                  }
+                });
+            }
+          });
+      });
+    }
+
+    const totalItems = allDramas.length;
+    const totalPages = Math.ceil(totalItems / pageSize);
+    const start = (page - 1) * pageSize;
+    const paginatedData = allDramas.slice(start, start + pageSize);
+
+    console.log(totalItems); // Log total item
+    console.log(paginatedData.length); // Log jumlah item setelah paginasi
+
+    // Kode untuk mendapatkan imageUrl (di-comment untuk referensi)
+    if (paginatedData.length > 0) {
+      for (const drama of paginatedData) {
+        const imageUrl = await this.searchRepository.getImageDrama(
+          drama.title.onlyAlphanumeric()
+        );
+        drama.imageUrl = imageUrl;
+      }
+    }
+
+    return new PagedData(
+      paginatedData,
+      new Page(totalItems, paginatedData.length, totalPages, page)
+    );
   }
 
   async getUpcoming(

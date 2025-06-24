@@ -107,14 +107,14 @@ export default class PersonRepositoryImpl implements PersonRepository {
         } else if (key == "movie" || key == "tvMovie") {
           type = "Movie";
         } else if (key == "name") {
-          type = "Actrees";
+          type = "Actress";
         } else {
           type = type;
         }
       }) ?? "Unknown";
 
-      if (type != "Actrees") {
-        throw new NotFoundError(`Only Actrees are supported. (${type})`);
+      if (type != "Actress") {
+        throw new NotFoundError(`Only Actress are supported. (${type})`);
       }
 
       personDetails["type"] = type;
@@ -213,6 +213,12 @@ export default class PersonRepositoryImpl implements PersonRepository {
 
         let translatedSectionTitle = await translate(sectionTitle, langCode);
         translatedSectionTitle = translatedSectionTitle.capitalEachWord();
+
+        console.log(translatedSectionTitle, items.length);
+
+        if (items.length === 0) {
+          continue;
+        }
 
         shows.push({
           section: translatedSectionTitle,

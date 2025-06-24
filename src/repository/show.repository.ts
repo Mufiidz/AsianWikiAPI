@@ -79,13 +79,13 @@ export default class ShowRepositoryImpl implements ShowRepository {
         } else if (key == "movie" || key == "tvMovie") {
           type = "Movie";
         } else if (key == "name") {
-          type = "Actrees";
+          type = "Actress";
         } else {
           type = type;
         }
       }) ?? "Unknown";
 
-      if (type == "Unknown" || type == "Actrees") {
+      if (type == "Unknown" || type == "Actress") {
         throw new NotFoundError(
           `Only Drama and Movie are supported. (${type})`
         );
@@ -363,13 +363,13 @@ function checkIsShow(id: string, $: CheerioAPI) {
     } else if (key == "movie" || key == "tvMovie") {
       type = "Movie";
     } else if (key == "name") {
-      type = "Actrees";
+      type = "Actress";
     } else {
       type = type;
     }
   }) ?? "Unknown";
 
-  if (type == "Unknown" || type == "Actrees") {
+  if (type == "Unknown" || type == "Actress") {
     throw new NotFoundError(`Only Drama and Movie are supported. (${type})`);
   }
 }

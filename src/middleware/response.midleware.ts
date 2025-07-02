@@ -15,7 +15,7 @@ export const isJsonString = (str: string) => {
 
 export const useSuccessResponse = (app: Elysia) => {
   return app.onAfterHandle(async ({ path, response, set }): Promise<any> => {
-    if (path.includes("/docs")) return;
+    if (path.includes("/docs") || /^\/deeplink\/[^/]+$/.test(path)) return;
     const code = Number(set.status) ?? 200;
     if (response instanceof PagedData) {
       return {

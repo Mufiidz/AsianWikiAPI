@@ -5,6 +5,8 @@ import baseScrape from "../utils/baseScrape";
 import SearchRepositoryImpl from "./search.repository";
 import { Page, PagedData } from "../model/pageddata.model";
 import { parseDateRange } from "../utils/dateRange";
+import { AsianWikiType } from "../model/contentType";
+import { BadRequest } from "../utils/errors";
 
 interface AsianwikiRepository {
   slider(): Promise<Drama[]>;
@@ -15,6 +17,7 @@ interface AsianwikiRepository {
     page: number
   ): Promise<PagedData<{}>>;
   getAllUpcoming(month: string, page: number): Promise<PagedData<{}>>;
+  getContentTypes(id: string): Promise<AsianWikiType>;
 }
 
 export default class AsianwikiRepositoryImpl implements AsianwikiRepository {
@@ -306,6 +309,44 @@ export default class AsianwikiRepositoryImpl implements AsianwikiRepository {
       });
 
       return results;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async getContentTypes(id: string): Promise<AsianWikiType> {
+    if (id.length <= 2) {
+      throw new BadRequest("Id must be at least 2 characters long");
+    }
+    try {
+      const baseUrl = Bun.env.BASE_URL;
+      const url = `${baseUrl}/${id}`;
+      const html = await baseScrape(url);
+      const $ = load(html);
+
+      const typeMap: Record<string, AsianWikiType> = {
+        name: AsianWikiType.Actress,
+        drama: AsianWikiType.DRAMA,
+        movie: AsianWikiType.MOVIE,
+      };
+
+      for (const el of $("ul li").toArray()) {
+        const rawKey = $(el)
+          .find("b")
+          .text()
+          .replace(":", "")
+          .trim()
+          .toLowerCase();
+        if (!rawKey) continue;
+
+        const key = rawKey.toCamelCase();
+
+        if (key in typeMap) {
+          return typeMap[key];
+        }
+      }
+
+      return AsianWikiType.UNKNOWN;
     } catch (error) {
       throw error;
     }

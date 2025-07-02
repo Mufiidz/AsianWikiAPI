@@ -28,3 +28,42 @@ Documentation in progress. Awaiting until all response structures are finalized 
 
 AsianWiki API is a RESTful API built using data scraped from [AsianWiki.com](https://asianwiki.com/Main_Page).
 This unofficial API provides structured access to Asian drama and movie information — including titles, casts, genres, and synopses — making it easy to integrate AsianWiki data into your applications.
+
+## Deeplink
+
+For deeplink still not understand yet especially for iOS. To deeplink using some domain need some file like:
+
+For Android (assetlinks.json)
+
+```
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "",
+    "package_name": "",
+    "sha256_cert_fingerprints":
+    [""]
+  }
+}]
+```
+
+For iOS (apple-app-site-association)
+
+```
+{
+  "applinks": {
+    "details": [
+      {
+        "appID": "<teamId>.<bundleId>",
+        "components":[
+          {
+            "/":"/deeplink/{id}",
+            "comment":"Matches URL with a path /deeplink"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+but still not working. So for deeplink is under fixing, and me [refer to this.](https://docs.flutter.dev/ui/navigation/deep-linking)

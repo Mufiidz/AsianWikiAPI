@@ -12,6 +12,7 @@ interface SearchRepository {
 export default class SearchRepositoryImpl implements SearchRepository {
   async searchAll(title: string, type?: string): Promise<Search[]> {
     try {
+      console.log({ title, type });
       const baseUrl = this.baseUrl(title);
       const html = await baseScrape(baseUrl);
       const $ = load(html);
@@ -55,6 +56,7 @@ export default class SearchRepositoryImpl implements SearchRepository {
             break;
         }
 
+        // TODO : Consider when no match
         if (!match) continue;
 
         let image = null;
@@ -68,7 +70,7 @@ export default class SearchRepositoryImpl implements SearchRepository {
         results.push({
           id: link.replace(/\//g, ""),
           title,
-          type: match[1],
+          type: match ? match[1] : null,
           url: `${Bun.env.BASE_URL}${link}`,
           imageUrl: image,
         });

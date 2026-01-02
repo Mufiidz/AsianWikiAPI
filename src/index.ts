@@ -42,8 +42,9 @@ const app = new Elysia({
   .use(asianWikiController)
   .use(showController)
   .use(personController)
-  .use(deeplinkController)
-  .listen(3000);
+  .use(deeplinkController);
+
+export default app;
 
 console.log(
   `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`

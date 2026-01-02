@@ -4,6 +4,7 @@ export function parseDateRange(
   weekStr: string
 ): { start: Date; end: Date | null } | null {
   try {
+    weekStr = weekStr.trim().replace(/\s*--+$/, "");
     const currentYear = new Date().getFullYear();
     const zone = "Asia/Jakarta";
 

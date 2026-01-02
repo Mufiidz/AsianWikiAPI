@@ -1,5 +1,5 @@
 import { CheerioAPI, load } from "cheerio";
-import translate from "translate";
+// import translate from "translate";
 import Cast from "../model/cast.model";
 import Drama from "../model/drama.model";
 import baseScrape from "../utils/baseScrape";
@@ -66,9 +66,9 @@ export default class ShowRepositoryImpl implements ShowRepository {
           value = parseInt(value, 10) || null;
         }
 
-        if (key === "language" || key === "country") {
-          value = await translate(value, langCode);
-        }
+        // if (key === "language" || key === "country") {
+        //   value = await translate(value, langCode);
+        // }
 
         dramaDetails[key] = value;
       }
@@ -139,9 +139,9 @@ export default class ShowRepositoryImpl implements ShowRepository {
         console.log({ synopsisTexts });
 
         for (const synopsisText of synopsisTexts) {
-          const translated = (
-            await translate(synopsisText, langCode)
-          ).cleaned();
+          const translated = synopsisText
+            // await translate(synopsisText, langCode)
+            .cleaned();
 
           if (translated) {
             synopsisTranslated.push(translated);

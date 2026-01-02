@@ -90,9 +90,8 @@ String.prototype.onlyAlphanumeric = function (): string {
 };
 
 String.prototype.capitalEachWord = function (): string {
-  return this
-    .split(" ")
-    .map(word =>
+  return this.split(" ")
+    .map((word) =>
       word.length > 0
         ? word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
         : ""
